@@ -19,10 +19,9 @@ unsigned long pressIntervalSum = 0;
 unsigned int pressCount = 0;
 bool buttonPressed = false;
 
-
 // Настройки таймера
 const unsigned long timerOptions[] = { 60 * 60000UL, 30 * 60000UL, 10 * 60000UL };
-byte selectedTimerIndex = 0; // По умолчанию — 60 минут
+byte selectedTimerIndex = 1; // По умолчанию — 30 минут
 unsigned long targetAlarmTime = 0;
 bool alarmTriggered = false;
 
@@ -34,7 +33,12 @@ bool selectButtonPressed = false;
 int scrollPos = 0;
 
 // Заголовок программы
-String programTitleUTF8 = "Тест на реальность, версия 1.0";
+String programTitleUTF8 = "Тест. Как ты попал в эту локацию? (1.1)";
+
+// === ДЕБАУНС для кнопок ===
+unsigned long buttonDebounceDelay = 50; // мс
+unsigned long lastButtonPress = 0;
+unsigned long lastSelectButtonPress = 0;
 
 // === ФУНКЦИЯ КОНВЕРТАЦИИ UTF-8 -> CP1251 для String ===
 String utf8rus(String source)
@@ -107,6 +111,11 @@ void setup() {
   delay(2000);
 
   targetAlarmTime = millis() + timerOptions[selectedTimerIndex];
+
+  // Инициализация начальных значений
+  lastPressTime = 0;
+  pressIntervalSum = 0;
+  pressCount = 0;
 }
 
 void loop() {
@@ -122,31 +131,38 @@ void checkMainButton() {
   bool currentState = digitalRead(BUTTON_PIN);
 
   if (currentState == LOW && !buttonPressed) {
-    unsigned long pressTime = millis();
-    unsigned long interval = pressTime - lastPressTime;
-    lastPressTime = pressTime;
+    unsigned long now = millis();
+    if (now - lastButtonPress > buttonDebounceDelay) {
 
-    pressCount++;
-    if (pressCount > 1) {
-      pressIntervalSum += interval;
+      tone(BUZZER_PIN, 1000, 50);
+
+      if (lastPressTime != 0) {
+        unsigned long interval = now - lastPressTime;
+        pressIntervalSum += interval;
+        pressCount++;
+      }
+
+      lastPressTime = now;
+      buttonPressed = true;
+      lastButtonPress = now;
     }
-
-    buttonPressed = true;
-    tone(BUZZER_PIN, 1000, 50);
   }
 
-  if (currentState == HIGH) {
+  if (currentState == HIGH && buttonPressed) {
     buttonPressed = false;
   }
 }
 
 void checkSelectButton() {
   bool state = digitalRead(SELECT_BUTTON);
-Serial.print("Текущий индекс таймера: ");
-Serial.println(selectedTimerIndex);
+
   if (state == LOW && !selectButtonPressed) {
-    selectButtonPressedTime = millis();
-    selectButtonPressed = true;
+    unsigned long now = millis();
+    if (now - lastSelectButtonPress > buttonDebounceDelay) {
+      selectButtonPressedTime = now;
+      selectButtonPressed = true;
+      lastSelectButtonPress = now;
+    }
   }
 
   if (state == HIGH && selectButtonPressed) {
@@ -207,12 +223,14 @@ void updateDisplay() {
   display.drawLine(0, 16, 127, 16, WHITE);
 
   // Счетчик нажатий
-  printFormatted(0, 20, "Нажатия: %d", pressCount);
+  int actualPresses = pressCount + (lastPressTime != 0 ? 1 : 0);
+  printFormatted(0, 20, "Нажатия: %d", actualPresses);
 
   // Средний интервал
-  if (pressCount > 1) {
-    float avgInterval = (float)pressIntervalSum / (pressCount - 1);
-    int secondsTotal = (int)(avgInterval + 0.5f); // Округление
+  if (pressCount > 0) {
+    float avgIntervalMs = (float)pressIntervalSum / (pressCount);
+    int secondsTotal = (int)(avgIntervalMs / 1000.0f + 0.5f); // мс -> сек, округление
+
     int hours = secondsTotal / 3600;
     int minutes = (secondsTotal % 3600) / 60;
     int seconds = secondsTotal % 60;
@@ -229,7 +247,6 @@ void updateDisplay() {
   int minutes = (secondsSince % 3600) / 60;
   int secs = secondsSince % 60;
   printFormatted(0, 44, "Нажали: %02d:%02d:%02d", hours, minutes, secs);
-
 
   // Таймер с временем
   unsigned long timeLeft = targetAlarmTime - millis();
