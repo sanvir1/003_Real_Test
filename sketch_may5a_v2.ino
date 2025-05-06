@@ -93,8 +93,8 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(SELECT_BUTTON, INPUT_PULLUP);
   pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(D8, OUTPUT); // подаю питание на D8, потому что не хватило +3.3в
-  digitalWrite(D8, HIGH);  // подаю питание на D8, потому что не хватило +3.3в
+  //pinMode(D8, OUTPUT); // подаю питание на D8, потому что не хватило +3.3в
+  //digitalWrite(D8, HIGH);  // подаю питание на D8, потому что не хватило +3.3в
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println("SSD1306 allocation failed");
